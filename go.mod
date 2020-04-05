@@ -22,3 +22,5 @@ require (
 	sigs.k8s.io/controller-tools v0.2.7
 	sigs.k8s.io/kind v0.7.0
 )
+
+replace github.com/envoyproxy/go-control-plane => github.com/110y/go-control-plane v0.0.1

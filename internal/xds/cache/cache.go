@@ -6,6 +6,7 @@ import (
 
 	apiv1 "github.com/110y/bootes/internal/k8s/api/v1"
 	"github.com/110y/bootes/internal/observer/trace"
+	routev2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
 	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	xdscache "github.com/envoyproxy/go-control-plane/pkg/cache/v2"
 	resource "github.com/envoyproxy/go-control-plane/pkg/resource/v2"
@@ -57,13 +58,14 @@ func (c *cache) UpdateAllResources(ctx context.Context, node, version string, cl
 	var s xdscache.Snapshot
 	oldSnapshot, err := c.snapshotCache.GetSnapshot(node)
 	if err != nil {
-		s = xdscache.NewSnapshot(version, nil, cr, nil, lr, nil)
+		s = xdscache.NewSnapshot(version, nil, cr, nil, lr, nil, nil)
 	} else {
 		endpoints := getResourceFromSnapshot(&oldSnapshot, resource.EndpointType)
 		routes := getResourceFromSnapshot(&oldSnapshot, resource.RouteType)
 		runtimes := getResourceFromSnapshot(&oldSnapshot, resource.RuntimeType)
+		virtualHosts := getResourceFromSnapshot(&oldSnapshot, resource.RuntimeType)
 
-		xdscache.NewSnapshot(version, endpoints, cr, routes, lr, runtimes)
+		xdscache.NewSnapshot(version, endpoints, cr, routes, lr, runtimes, virtualHosts)
 	}
 
 	if err := c.snapshotCache.SetSnapshot(node, s); err != nil {
@@ -117,15 +119,16 @@ func (c *cache) newClusterSnapshot(node, version string, clusters []*apiv1.Clust
 
 	s, err := c.snapshotCache.GetSnapshot(node)
 	if err != nil {
-		return xdscache.NewSnapshot(version, nil, resources, nil, nil, nil)
+		return xdscache.NewSnapshot(version, nil, resources, nil, nil, nil, nil)
 	}
 
 	endpoints := getResourceFromSnapshot(&s, resource.EndpointType)
 	routes := getResourceFromSnapshot(&s, resource.RouteType)
 	listeners := getResourceFromSnapshot(&s, resource.ListenerType)
 	runtimes := getResourceFromSnapshot(&s, resource.RuntimeType)
+	virtualHosts := getResourceFromSnapshot(&s, resource.VirtualHostType)
 
-	return xdscache.NewSnapshot(version, endpoints, resources, routes, listeners, runtimes)
+	return xdscache.NewSnapshot(version, endpoints, resources, routes, listeners, runtimes, virtualHosts)
 }
 
 func (c *cache) newListenerSnapshot(node, version string, listeners []*apiv1.Listener) xdscache.Snapshot {
@@ -136,15 +139,16 @@ func (c *cache) newListenerSnapshot(node, version string, listeners []*apiv1.Lis
 
 	s, err := c.snapshotCache.GetSnapshot(node)
 	if err != nil {
-		return xdscache.NewSnapshot(version, nil, nil, nil, resources, nil)
+		return xdscache.NewSnapshot(version, nil, nil, nil, resources, nil, nil)
 	}
 
 	endpoints := getResourceFromSnapshot(&s, resource.EndpointType)
 	clusters := getResourceFromSnapshot(&s, resource.ClusterType)
 	routes := getResourceFromSnapshot(&s, resource.RouteType)
 	runtimes := getResourceFromSnapshot(&s, resource.RuntimeType)
+	virtualHosts := getResourceFromSnapshot(&s, resource.VirtualHostType)
 
-	return xdscache.NewSnapshot(version, endpoints, clusters, routes, resources, runtimes)
+	return xdscache.NewSnapshot(version, endpoints, clusters, routes, resources, runtimes, virtualHosts)
 }
 
 func (c *cache) newRouteSnapshot(node, version string, routes []*apiv1.Route) xdscache.Snapshot {
@@ -155,15 +159,38 @@ func (c *cache) newRouteSnapshot(node, version string, routes []*apiv1.Route) xd
 
 	s, err := c.snapshotCache.GetSnapshot(node)
 	if err != nil {
-		return xdscache.NewSnapshot(version, nil, nil, resources, nil, nil)
+		return xdscache.NewSnapshot(version, nil, nil, resources, nil, nil, nil)
 	}
 
 	endpoints := getResourceFromSnapshot(&s, resource.EndpointType)
 	clusters := getResourceFromSnapshot(&s, resource.ClusterType)
 	listeners := getResourceFromSnapshot(&s, resource.ListenerType)
 	runtimes := getResourceFromSnapshot(&s, resource.RuntimeType)
+	// virtualHosts := getResourceFromSnapshot(&s, resource.VirtualHostType)
 
-	return xdscache.NewSnapshot(version, endpoints, clusters, resources, listeners, runtimes)
+	vh := &routev2.VirtualHost{
+		Name:    "route-1/aaaaaaaa",
+		Domains: []string{"*"},
+		Routes: []*routev2.Route{
+			{
+				Match: &routev2.RouteMatch{
+					PathSpecifier: &routev2.RouteMatch_Prefix{
+						Prefix: "/",
+					},
+				},
+				Action: &routev2.Route_Route{
+					Route: &routev2.RouteAction{
+						ClusterSpecifier: &routev2.RouteAction_Cluster{
+							Cluster: "cluster-2",
+						},
+					},
+				},
+			},
+		},
+	}
+	virtualHosts := []types.Resource{types.Resource(vh)}
+
+	return xdscache.NewSnapshot(version, endpoints, clusters, resources, listeners, runtimes, virtualHosts)
 }
 
 func getResourceFromSnapshot(snapshot *xdscache.Snapshot, typeURL string) []types.Resource {

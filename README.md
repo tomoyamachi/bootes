@@ -38,6 +38,6 @@ By applying this example resource, Bootes sends one cluster configuration named 
 - [x] Cluster
 - [x] Listener
 - [x] Route
-- [ ] VirtualHost
+- [x] VirtualHost
 - [ ] Endpoint
 - [ ] Runtime
